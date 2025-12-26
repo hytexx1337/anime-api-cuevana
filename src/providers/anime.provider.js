@@ -105,8 +105,9 @@ async function isJapaneseAnime(tmdbId, type, season) {
 /**
  * Buscar y obtener streams de un provider de Kenjitsu
  * @param {string} version - 'sub' o 'dub'
+ * @param {number} seasonYear - Año de estreno de la temporada para filtrar resultados
  */
-async function fetchFromKenjitsuProvider(provider, title, season, episode, version = 'sub') {
+async function fetchFromKenjitsuProvider(provider, title, season, episode, version = 'sub', seasonYear = null) {
   const logPrefix = `[${provider.name}:${version}]`;
   const startTime = Date.now();
 
@@ -123,8 +124,31 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
       throw new Error('No results found');
     }
 
-    const animeId = results[0].id;
-    logger.debug(`${logPrefix} Found: ${animeId}`);
+    // Filtrar por año si está disponible (para distinguir temporadas)
+    let matchedAnime = results[0]; // Default: primer resultado
+    
+    if (seasonYear && results.length > 1) {
+      logger.debug(`${logPrefix} Filtering by year: ${seasonYear}`);
+      
+      // Buscar match exacto por año en releaseDate
+      const yearMatch = results.find(r => {
+        if (r.releaseDate) {
+          const releaseYear = parseInt(r.releaseDate);
+          return releaseYear === seasonYear;
+        }
+        return false;
+      });
+      
+      if (yearMatch) {
+        matchedAnime = yearMatch;
+        logger.debug(`${logPrefix} Matched by year: ${matchedAnime.id} (${seasonYear})`);
+      } else {
+        logger.warn(`${logPrefix} No exact year match found for ${seasonYear}, using first result`);
+      }
+    }
+
+    const animeId = matchedAnime.id;
+    logger.debug(`${logPrefix} Using anime: ${animeId}`);
 
     // Step 2: Get episodes
     const episodesResp = await axios.get(`${KENJITSU_API}${provider.episodesPath(animeId)}`, {
@@ -292,14 +316,14 @@ export async function extractAnimeStream(tmdbId, type, season = 1, episode = 1) 
     // Step 2: Buscar en PARALELO (SUB, DUB, y Cuevana)
     logger.info(`${logPrefix} Step 2: Fetching from all providers in parallel...`);
     
-    // Crear promesas para SUB (original japonés con subs)
+    // Crear promesas para SUB (original japonés con subs) - con seasonYear para filtrar
     const kenjitsuSubPromises = KENJITSU_PROVIDERS.map(provider =>
-      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'sub')
+      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'sub', animeCheck.seasonYear)
     );
 
-    // Crear promesas para DUB (doblaje inglés)
+    // Crear promesas para DUB (doblaje inglés) - con seasonYear para filtrar
     const kenjitsuDubPromises = KENJITSU_PROVIDERS.map(provider =>
-      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'dub')
+      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'dub', animeCheck.seasonYear)
     );
 
     const cuevanaPromise = fetchFromCuevana(tmdbId, type, season, episode);
