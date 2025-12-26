@@ -183,8 +183,8 @@ export async function extractVidlink(type, tmdbId, season, episode) {
       // Timeout OK si ya tenemos M3U8
     }
 
-    // 6. Esperar solo 1 segundo (clave de la velocidad)
-    await new Promise(r => setTimeout(r, 1000));
+    // 6. Esperar 2 segundos para que cargue el player
+    await new Promise(r => setTimeout(r, 2000));
 
     // 7. Evaluar resultado
     if (foundM3u8) {
@@ -194,13 +194,14 @@ export async function extractVidlink(type, tmdbId, season, episode) {
       foundM3u8 = candidates[0].url;
       logger.info(`${logPrefix} ✅ Best candidate selected in ${Date.now() - startTime}ms`);
     } else {
-      // Último intento: esperar 1.5s más
+      // Último intento: esperar 3s más
       logger.debug(`${logPrefix} 🔍 Searching M3U8...`);
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 3000));
       
       if (candidates.length > 0) {
         candidates.sort((a, b) => b.score - a.score);
         foundM3u8 = candidates[0].url;
+        logger.info(`${logPrefix} ✅ Candidate found after extra wait`);
       }
     }
 
