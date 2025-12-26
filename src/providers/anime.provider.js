@@ -77,8 +77,11 @@ async function isJapaneseAnime(tmdbId, type, season) {
         const seasonData = seasonResp.data;
         seasonYear = seasonData.air_date ? new Date(seasonData.air_date).getFullYear() : null;
         
-        // Agregar "Season X" al título para búsqueda si es temporada > 1
-        searchTitle = `${title} Season ${season}`;
+        // Solo agregar "Season X" si es temporada > 1 (Season 1 suele no tener "Season 1" en el nombre)
+        if (season > 1) {
+          searchTitle = `${title} Season ${season}`;
+        }
+        // Para Season 1, usar el título sin modificar
         
         logger.info(`${logPrefix} Season ${season} aired in ${seasonYear}, search: "${searchTitle}"`);
       } catch (err) {
@@ -105,9 +108,8 @@ async function isJapaneseAnime(tmdbId, type, season) {
 /**
  * Buscar y obtener streams de un provider de Kenjitsu
  * @param {string} version - 'sub' o 'dub'
- * @param {number} seasonYear - Año de estreno de la temporada para filtrar resultados
  */
-async function fetchFromKenjitsuProvider(provider, title, season, episode, version = 'sub', seasonYear = null) {
+async function fetchFromKenjitsuProvider(provider, title, season, episode, version = 'sub') {
   const logPrefix = `[${provider.name}:${version}]`;
   const startTime = Date.now();
 
@@ -124,31 +126,40 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
       throw new Error('No results found');
     }
 
-    // Filtrar por año si está disponible (para distinguir temporadas)
+    // Filtrar para distinguir temporadas cuando hay múltiples resultados
     let matchedAnime = results[0]; // Default: primer resultado
     
-    if (seasonYear && results.length > 1) {
-      logger.debug(`${logPrefix} Filtering by year: ${seasonYear}`);
+    if (results.length > 1) {
+      logger.debug(`${logPrefix} Multiple results (${results.length}), filtering for season ${season}...`);
       
-      // Buscar match exacto por año en releaseDate
-      const yearMatch = results.find(r => {
-        if (r.releaseDate) {
-          const releaseYear = parseInt(r.releaseDate);
-          return releaseYear === seasonYear;
+      if (season === 1) {
+        // Season 1: buscar el que NO tenga "Season" en el nombre (ej: "Solo Leveling" vs "Solo Leveling Season 2")
+        const season1Match = results.find(r => 
+          r.name && !r.name.toLowerCase().includes('season') && !r.name.toLowerCase().includes('2nd')
+        );
+        
+        if (season1Match) {
+          matchedAnime = season1Match;
+          logger.debug(`${logPrefix} Season 1 matched: ${matchedAnime.id} (name: "${matchedAnime.name}")`);
+        } else {
+          logger.warn(`${logPrefix} Could not find Season 1 match, using first result`);
         }
-        return false;
-      });
-      
-      if (yearMatch) {
-        matchedAnime = yearMatch;
-        logger.debug(`${logPrefix} Matched by year: ${matchedAnime.id} (${seasonYear})`);
       } else {
-        logger.warn(`${logPrefix} No exact year match found for ${seasonYear}, using first result`);
+        // Season > 1: buscar el que tenga "Season X" en el nombre
+        const seasonPattern = new RegExp(`season\\s*${season}`, 'i');
+        const seasonMatch = results.find(r => r.name && seasonPattern.test(r.name));
+        
+        if (seasonMatch) {
+          matchedAnime = seasonMatch;
+          logger.debug(`${logPrefix} Season ${season} matched: ${matchedAnime.id} (name: "${matchedAnime.name}")`);
+        } else {
+          logger.warn(`${logPrefix} Could not find Season ${season} match, using first result`);
+        }
       }
     }
 
     const animeId = matchedAnime.id;
-    logger.debug(`${logPrefix} Using anime: ${animeId}`);
+    logger.debug(`${logPrefix} Using anime: ${animeId} (${matchedAnime.name})`);
 
     // Step 2: Get episodes
     const episodesResp = await axios.get(`${KENJITSU_API}${provider.episodesPath(animeId)}`, {
@@ -316,14 +327,14 @@ export async function extractAnimeStream(tmdbId, type, season = 1, episode = 1) 
     // Step 2: Buscar en PARALELO (SUB, DUB, y Cuevana)
     logger.info(`${logPrefix} Step 2: Fetching from all providers in parallel...`);
     
-    // Crear promesas para SUB (original japonés con subs) - con seasonYear para filtrar
+    // Crear promesas para SUB (original japonés con subs)
     const kenjitsuSubPromises = KENJITSU_PROVIDERS.map(provider =>
-      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'sub', animeCheck.seasonYear)
+      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'sub')
     );
 
-    // Crear promesas para DUB (doblaje inglés) - con seasonYear para filtrar
+    // Crear promesas para DUB (doblaje inglés)
     const kenjitsuDubPromises = KENJITSU_PROVIDERS.map(provider =>
-      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'dub', animeCheck.seasonYear)
+      fetchFromKenjitsuProvider(provider, animeCheck.searchTitle, season, episode, 'dub')
     );
 
     const cuevanaPromise = fetchFromCuevana(tmdbId, type, season, episode);
