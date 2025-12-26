@@ -1,0 +1,40 @@
+{
+  "name": "streaming-api",
+  "version": "1.0.0",
+  "description": "API unificada de extracción de streams (Vidlink, Cuevana, Vidify + fallbacks)",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop streaming-api",
+    "pm2:restart": "pm2 restart streaming-api",
+    "pm2:logs": "pm2 logs streaming-api",
+    "pm2:monit": "pm2 monit"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "puppeteer": "^24.33.0",
+    "cors": "^2.8.5",
+    "compression": "^1.8.1",
+    "dotenv": "^17.2.2",
+    "express-rate-limit": "^7.5.0",
+    "winston": "^3.17.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "streaming",
+    "m3u8",
+    "puppeteer",
+    "scraping",
+    "vidlink",
+    "cuevana",
+    "vidify"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+
