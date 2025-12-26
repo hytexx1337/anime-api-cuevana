@@ -136,15 +136,32 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
       logger.info(`${logPrefix} Available results: ${results.map((r, i) => `[${i}] ${r.name || r.id}`).join(', ')}`);
       
       if (season === 1) {
-        // Season 1: buscar el que NO tenga "Season" en el nombre (ej: "Solo Leveling" vs "Solo Leveling Season 2")
+        // Season 1: buscar el que tenga EXACTAMENTE el título base sin Season/2nd/Specials/ReAwakening
+        const baseTitleLower = title.toLowerCase().trim();
+        
         const season1Match = results.find(r => {
-          const hasName = r.name;
-          const includesSeason = r.name && r.name.toLowerCase().includes('season');
-          const includes2nd = r.name && r.name.toLowerCase().includes('2nd');
+          if (!r.name) return false;
           
-          logger.debug(`${logPrefix} Checking "${r.name}": hasName=${hasName}, includesSeason=${includesSeason}, includes2nd=${includes2nd}`);
+          const nameLower = r.name.toLowerCase().trim();
           
-          return r.name && !includesSeason && !includes2nd;
+          // Match exacto del título
+          if (nameLower === baseTitleLower) {
+            logger.info(`${logPrefix} ✓ Exact match: "${r.name}"`);
+            return true;
+          }
+          
+          // Evitar cualquier cosa con "Season", "2nd", "Specials", "ReAwakening", ":", "Movie", "OVA"
+          const invalidKeywords = ['season', '2nd', 'special', 'reawaken', 'movie', 'ova'];
+          const hasInvalidKeyword = invalidKeywords.some(kw => nameLower.includes(kw));
+          const hasColon = r.name.includes(':');
+          
+          if (hasInvalidKeyword || hasColon) {
+            return false;
+          }
+          
+          // Si llega aquí, es el título simple
+          logger.info(`${logPrefix} ✓ Simple match: "${r.name}"`);
+          return true;
         });
         
         if (season1Match) {
