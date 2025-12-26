@@ -62,7 +62,7 @@ export async function extractCuevana(type, tmdbId, season, episode) {
       headers: {
         'User-Agent': 'streaming-api/1.0'
       },
-      signal: AbortSignal.timeout(10000) // 10s timeout
+      signal: AbortSignal.timeout(20000) // ⬆️ Aumentado de 10s a 20s
     });
 
     if (!response.ok) {

@@ -7,10 +7,14 @@ const VIDIFY_API = 'https://apiv2.vidify.top/api';
 const VIDIFY_KEY = 'HpobLp2wBesBkA8rU9HJQcYTBxdrs8X1';
 const VIDIFY_TOKEN = '1212';
 
-// Servidores disponibles (English Dub solamente, Latino viene de Cuevana)
+// Servidores disponibles - Original Lang y English Dub solamente (igual que API original)
 const VIDIFY_SERVERS = [
+  // Original Lang (sr: 44) - Prioridad alta
+  { name: 'Adam', sr: 44, language: 'Original Lang', quality: 'Fast' },
+  { name: 'Vplus', sr: 18, language: 'Original Lang', quality: 'Fast' },
+  // English Dub
   { name: 'Test', sr: 28, language: 'English Dub', quality: 'Fast' },
-  { name: 'Vfast', sr: 11, language: 'English Dub', quality: '' }
+  { name: 'Vfast', sr: 11, language: 'English Dub', quality: '' },
 ];
 
 /**
