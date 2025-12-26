@@ -132,17 +132,26 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
     if (results.length > 1) {
       logger.debug(`${logPrefix} Multiple results (${results.length}), filtering for season ${season}...`);
       
+      // DEBUG: Mostrar todos los nombres
+      logger.info(`${logPrefix} Available results: ${results.map((r, i) => `[${i}] ${r.name || r.id}`).join(', ')}`);
+      
       if (season === 1) {
         // Season 1: buscar el que NO tenga "Season" en el nombre (ej: "Solo Leveling" vs "Solo Leveling Season 2")
-        const season1Match = results.find(r => 
-          r.name && !r.name.toLowerCase().includes('season') && !r.name.toLowerCase().includes('2nd')
-        );
+        const season1Match = results.find(r => {
+          const hasName = r.name;
+          const includesSeason = r.name && r.name.toLowerCase().includes('season');
+          const includes2nd = r.name && r.name.toLowerCase().includes('2nd');
+          
+          logger.debug(`${logPrefix} Checking "${r.name}": hasName=${hasName}, includesSeason=${includesSeason}, includes2nd=${includes2nd}`);
+          
+          return r.name && !includesSeason && !includes2nd;
+        });
         
         if (season1Match) {
           matchedAnime = season1Match;
-          logger.debug(`${logPrefix} Season 1 matched: ${matchedAnime.id} (name: "${matchedAnime.name}")`);
+          logger.info(`${logPrefix} Season 1 matched: ${matchedAnime.id} (name: "${matchedAnime.name}")`);
         } else {
-          logger.warn(`${logPrefix} Could not find Season 1 match, using first result`);
+          logger.warn(`${logPrefix} Could not find Season 1 match, using first result: ${results[0].name}`);
         }
       } else {
         // Season > 1: buscar el que tenga "Season X" en el nombre
