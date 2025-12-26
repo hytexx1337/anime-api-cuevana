@@ -139,10 +139,14 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
         // Season 1: buscar el que tenga EXACTAMENTE el título base sin Season/2nd/Specials/ReAwakening
         const baseTitleLower = title.toLowerCase().trim();
         
+        logger.info(`${logPrefix} 🔍 Searching for: "${title}" (lowercase: "${baseTitleLower}")`);
+        
         const season1Match = results.find(r => {
           if (!r.name) return false;
           
           const nameLower = r.name.toLowerCase().trim();
+          
+          logger.info(`${logPrefix} 🔍 Comparing "${r.name}" (lowercase: "${nameLower}") === "${baseTitleLower}": ${nameLower === baseTitleLower}`);
           
           // Match exacto del título
           if (nameLower === baseTitleLower) {
