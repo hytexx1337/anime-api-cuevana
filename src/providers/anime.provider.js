@@ -28,9 +28,9 @@ const KENJITSU_PROVIDERS = [
 ];
 
 /**
- * Verificar si es anime japonés
+ * Verificar si es anime japonés y obtener info de la temporada
  */
-async function isJapaneseAnime(tmdbId, type) {
+async function isJapaneseAnime(tmdbId, type, season) {
   const logPrefix = `[ANIME-CHECK]`;
   
   if (!TMDB_BEARER) {
@@ -62,13 +62,38 @@ async function isJapaneseAnime(tmdbId, type) {
 
     const isAnime = isAnimation && isJapanese;
 
+    let searchTitle = title;
+    let seasonYear = null;
+
+    // Para series, obtener info de la temporada específica
+    if (type === 'tv' && season && season > 1) {
+      try {
+        const seasonEndpoint = `https://api.themoviedb.org/3/tv/${tmdbId}/season/${season}`;
+        const seasonResp = await axios.get(seasonEndpoint, {
+          headers: { 'Authorization': `Bearer ${TMDB_BEARER}` },
+          timeout: 5000
+        });
+        
+        const seasonData = seasonResp.data;
+        seasonYear = seasonData.air_date ? new Date(seasonData.air_date).getFullYear() : null;
+        
+        // Agregar "Season X" al título para búsqueda si es temporada > 1
+        searchTitle = `${title} Season ${season}`;
+        
+        logger.info(`${logPrefix} Season ${season} aired in ${seasonYear}, search: "${searchTitle}"`);
+      } catch (err) {
+        logger.warn(`${logPrefix} Failed to fetch season ${season} info:`, err.message);
+      }
+    }
+
     logger.info(`${logPrefix} ${tmdbId} - ${title}: isAnime=${isAnime} (Animation=${isAnimation}, JP=${isJapanese})`);
 
     return {
       isAnime,
       title,
       originalTitle,
-      searchTitle: title // Usar título en inglés para búsqueda
+      searchTitle,
+      seasonYear
     };
 
   } catch (error) {
@@ -250,7 +275,7 @@ export async function extractAnimeStream(tmdbId, type, season = 1, episode = 1) 
 
     // Step 1: Verificar si es anime japonés
     logger.info(`${logPrefix} Step 1: Checking if Japanese anime...`);
-    const animeCheck = await isJapaneseAnime(tmdbId, type);
+    const animeCheck = await isJapaneseAnime(tmdbId, type, season);
     
     if (!animeCheck.isAnime) {
       logger.info(`${logPrefix} Not a Japanese anime, skipping`);
