@@ -18,6 +18,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Trust proxy (requerido cuando está detrás de Nginx)
+app.set('trust proxy', true);
+
 // Middleware
 app.use(cors());
 app.use(compression());
