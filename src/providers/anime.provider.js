@@ -114,6 +114,9 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
   const startTime = Date.now();
 
   try {
+    // CRITICAL: Convertir season a número (viene como string desde query params)
+    const seasonNum = parseInt(season, 10);
+    
     // Step 1: Search
     logger.debug(`${logPrefix} Searching: "${title}"`);
     const searchResp = await axios.get(`${KENJITSU_API}${provider.searchPath}`, {
@@ -130,23 +133,22 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
     let matchedAnime = results[0]; // Default: primer resultado
     
     if (results.length > 1) {
-      logger.debug(`${logPrefix} Multiple results (${results.length}), filtering for season ${season}...`);
+      logger.debug(`${logPrefix} Multiple results (${results.length}), filtering for season ${seasonNum}...`);
       
       // DEBUG: Mostrar todos los nombres
       logger.info(`${logPrefix} Available results: ${results.map((r, i) => `[${i}] ${r.name || r.id}`).join(', ')}`);
       
-      if (season === 1) {
+      if (seasonNum === 1) {
         // Season 1: buscar el que tenga EXACTAMENTE el título base sin Season/2nd/Specials/ReAwakening
         const baseTitleLower = title.toLowerCase().trim();
+        const baseTitleWords = baseTitleLower.split(' ').slice(0, 2); // Primeras 2 palabras
         
-        logger.info(`${logPrefix} 🔍 Searching for: "${title}" (lowercase: "${baseTitleLower}")`);
+        logger.info(`${logPrefix} 🔍 Searching for: "${title}" (lowercase: "${baseTitleLower}", words: ${baseTitleWords.join(', ')})`);
         
         const season1Match = results.find(r => {
           if (!r.name) return false;
           
           const nameLower = r.name.toLowerCase().trim();
-          
-          logger.info(`${logPrefix} 🔍 Comparing "${r.name}" (lowercase: "${nameLower}") === "${baseTitleLower}": ${nameLower === baseTitleLower}`);
           
           // Match exacto del título
           if (nameLower === baseTitleLower) {
@@ -163,7 +165,15 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
             return false;
           }
           
-          // Si llega aquí, es el título simple
+          // Verificar que contenga todas las palabras clave del título base
+          const resultNameWords = nameLower.split(' ');
+          const hasAllWords = baseTitleWords.every(word => resultNameWords.includes(word));
+          
+          if (!hasAllWords) {
+            return false;
+          }
+          
+          // Si llega aquí, es el título simple con las palabras clave correctas
           logger.info(`${logPrefix} ✓ Simple match: "${r.name}"`);
           return true;
         });
@@ -175,15 +185,69 @@ async function fetchFromKenjitsuProvider(provider, title, season, episode, versi
           logger.warn(`${logPrefix} Could not find Season 1 match, using first result: ${results[0].name}`);
         }
       } else {
-        // Season > 1: buscar el que tenga "Season X" en el nombre
-        const seasonPattern = new RegExp(`season\\s*${season}`, 'i');
-        const seasonMatch = results.find(r => r.name && seasonPattern.test(r.name));
+        // Season > 1: buscar el que tenga el número al final primero, luego otros patterns
+        logger.info(`${logPrefix} 🔍 Searching for Season ${seasonNum}...`);
+        
+        // Limpiar el título de búsqueda removiendo "Season X" para comparaciones
+        const cleanTitle = title
+          .replace(/season\s*\d+/gi, '')
+          .replace(/[:\-!?]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
+        
+        const cleanTitleWords = cleanTitle.split(' ').slice(0, 2); // Primeras 2 palabras
+        logger.info(`${logPrefix} Clean title for matching: "${cleanTitle}" (words: ${cleanTitleWords.join(', ')})`);
+        
+        // Patterns a buscar (EN ORDEN DE PRIORIDAD - más específico primero)
+        const patterns = [
+          new RegExp(`\\s${seasonNum}$`, 'i'),                     // "Konosuba 2", "Konosuba 3" (número al final) - MÁS ESPECÍFICO
+          new RegExp(`\\s${seasonNum}\\s`, 'i'),                   // "Konosuba 2 OVA" (número en medio)
+          seasonNum === 2 ? /\s(2nd|ii)\s?/i : null,              // "2nd Season", "Part II"
+          seasonNum === 3 ? /\s(3rd|iii)\s?/i : null,             // "3rd Season", "Part III"
+          seasonNum === 4 ? /\s(4th|iv)\s?/i : null,              // "4th Season", "Part IV"
+          new RegExp(`part\\s*${seasonNum}`, 'i'),                 // "Part 2", "Part 3"
+          new RegExp(`season\\s*${seasonNum}`, 'i'),              // "Season 2", "Season 3" - MENOS ESPECÍFICO (último)
+        ].filter(Boolean);
+        
+        let seasonMatch = null;
+        
+        for (const pattern of patterns) {
+          seasonMatch = results.find(r => {
+            if (!r.name) return false;
+            
+            // Para pattern de "Season X", asegurarse que el título base coincida
+            if (pattern.toString().includes('season')) {
+              const resultNameClean = r.name
+                .toLowerCase()
+                .replace(/[:\-!?]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+              
+              // Verificar que las primeras 2 palabras del título limpio estén en el resultado
+              const matchesBaseTitle = cleanTitleWords.every(word => resultNameClean.includes(word));
+              
+              if (!matchesBaseTitle) {
+                logger.debug(`${logPrefix} ❌ "${r.name}" doesn't match base title (looking for: ${cleanTitleWords.join(' ')})`);
+                return false; // No es el mismo anime
+              }
+            }
+            
+            const match = pattern.test(r.name);
+            if (match) {
+              logger.info(`${logPrefix} ✓ Matched "${r.name}" with pattern ${pattern}`);
+            }
+            return match;
+          });
+          
+          if (seasonMatch) break;
+        }
         
         if (seasonMatch) {
           matchedAnime = seasonMatch;
-          logger.debug(`${logPrefix} Season ${season} matched: ${matchedAnime.id} (name: "${matchedAnime.name}")`);
+          logger.info(`${logPrefix} Season ${season} matched: ${matchedAnime.id} (name: "${matchedAnime.name}")`);
         } else {
-          logger.warn(`${logPrefix} Could not find Season ${season} match, using first result`);
+          logger.warn(`${logPrefix} Could not find Season ${season} match, using first result: ${results[0].name}`);
         }
       }
     }
